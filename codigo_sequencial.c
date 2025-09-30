@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/time.h>
 //#include <pthread.h>
 #include <string.h>
 
@@ -38,7 +39,6 @@ void gerar_vetores(int ***matriz_vetores, int num_vetores, int tamanho) {
     }
 }
 
-
 // Função de troca
 void trocar(int *a, int *b) {
     int temp = *a;
@@ -73,6 +73,8 @@ void quicksort(int arr[], int left, int right) {
     }
 }
 
+struct timeval t1, t2;
+
 int main(){
 
     // Inicializa a semente do gerador de números aleatórios
@@ -83,11 +85,16 @@ int main(){
 
     gerar_vetores(&vetores_sequencial, NUM_VETORES, TAMANHO_VETOR);
 
-
+    gettimeofday(&t1, NULL);
     //Organização da matrix sequencial
     for( int i = 0; i < NUM_VETORES; i++) {
         quicksort(vetores_sequencial[i], 0, TAMANHO_VETOR-1);
     }
+    gettimeofday(&t2, NULL);
+
+    double t_total = (t2.tv_sec - t1.tv_sec) + ((t2.tv_usec -
+    t1.tv_usec)/1000000.0);
+    printf("tempo total = %f\n", t_total);
 }
 
 
