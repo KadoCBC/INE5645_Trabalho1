@@ -4,27 +4,37 @@
 #include <semaphore.h>
 #include "paralel.h"
 
-//LOGICA ATÉ O MOMENTO -> CRIAÇÃO DO CODIGO PRODUTOR CONSUMIDOR
-// E LOGICA DE POOL DE THREADS, FALTA AINDA ENTENDER COMO TRASNFORMAR ISSO
-// EM UMA BIBLIOTECA QUE TEM UMA FUNÇÃO PARA ENVIAR AS TAREFAS 
-
+// Thread mestre será a main do programa -> produtora
+// A função executar(task) será a ação de produzir
+// A fila de tarefas é o buffer do padrão
+// a pool de threads será quem consumira as tarefas do buffer -> consumidora
+// Será controlado o acesso por mutex e variaveis de condição
 
 //Tamanho da pool de threads
 #define T_POOL 5
-//lista de threads
-pthread_t threads[T_POOL];
-int threads_id[T_POOL];
 
-// Lista = buffer do padrao produtor consumidor 
-int fila[T_POOL];
-int contador_fila = 0;
+//Criando o tipo para a fila de tarefas (buffer)
+typedef struct 
+{
+    Tarefa lista_t[T_POOL];
+    int inicio;
+    int fim;
 
+    //mutex para proteger seção critica
+    pthread_mutex_t mutex;
+    //Semaforos para "contar" tarefas
+    sem_t espaco;
+    sem_t ocupado;
+} FilaTarefas;
 
-// inicialização semafaro para padrão produtor consumidor (Como só tem um produtor precisa fazer um semafaro para produzir ?)
-sem_t espaco;
-sem_t ocupado;
-//incializacao do mutex para add no buffer
-pthread_mutex_t mutex;
+//Declarando o conteudo do tipo ThreadPool(.h)
+struct ThreadPool
+{
+    pthread_t *threads;
+    int id_threads;
+    FilaTarefas *fila;
+};
+
 
 //Thread que irá fazer a chamada das atividades para pool -> produtora
 void *thread_mestre(void *args){
@@ -52,8 +62,20 @@ void *thread_mestre(void *args){
 };
 
 //Threads que irá exucutar a lista de atividas -> consumidora
-void *thread_workers(void *args){
+void *thread_worker(void *args){
+
+    //Conversão do argumento para o tipo ThreadPool
+    ThreadPool *pool = (ThreadPool *)arg; // ponteiro ->pool do tipo ThreadPool que recebe do argumento da funcao uma ThreadPool
+    //criar um ponteiro para fila, argumento dentro da pool(facilitar o acesso a fila)
+    FilaTarefas *fila = pool->fila; 
     
+    While(1){
+
+        
+
+    };
+
+
     //espera sinal de nova taks
     sem_wait(&ocupado);
 
