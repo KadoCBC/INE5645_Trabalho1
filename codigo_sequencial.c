@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <time.h>
 #include <sys/time.h>
-//#include <pthread.h>
 #include <string.h>
 
 // Definições globais

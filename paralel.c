@@ -8,7 +8,7 @@
 // A função executar(task) será a ação de produzir
 // A fila de tarefas é o buffer do padrão
 // a pool de threads será quem consumira as tarefas do buffer -> consumidora
-// Será controlado o acesso por mutex e variaveis de condição
+// Será controlado o acesso por mutex e semafaros
 
 //Tamanho da pool de threads
 #define T_POOL 5
@@ -25,7 +25,7 @@ typedef struct
 //Criando o tipo para a fila de tarefas (buffer)
 typedef struct FilaTarefas
 {
-    Tarefa* tarefas; // ponteiro para lista de tarefas
+    Tarefa *tarefas; // ponteiro para lista de tarefas
     size_t inicio, fim, tamanho_max;
 
     //mutex para proteger seção critica
@@ -49,11 +49,11 @@ struct ThreadPool
 void *thread_worker(void *args){
 
     //Conversão do argumento para o tipo ThreadPool
-    ThreadPool *pool = (ThreadPool *)arg; // ponteiro pool do tipo ThreadPool que recebe do argumento da funcao uma ThreadPool
+    ThreadPool *pool = (ThreadPool *)args; // ponteiro pool do tipo ThreadPool que recebe do argumento da funcao uma ThreadPool
     //criar um ponteiro para fila, argumento dentro da pool(facilitar o acesso a fila)
     FilaTarefas *fila = pool->fila; 
     
-    While(1){
+    while(1){
         //Espera até que tenha algo na fila, usando semafaro
         sem_wait(&fila->ocupado); //wait no semafaro ocupado, que é atributo da fila
         
@@ -68,7 +68,7 @@ void *thread_worker(void *args){
         pthread_mutex_lock(&fila->mutex);
 
         //dentro da fila, pegando a tarefa do inicio da lista e guardando o retorno
-        Tarefa tarefa = fila->lista_t[fila->inicio];
+        Tarefa tarefa = fila->tarefas[fila->inicio];
         fila -> inicio = (fila->inicio + 1) % fila->tamanho_max;;
 
         pthread_mutex_unlock(&fila->mutex);
@@ -77,14 +77,14 @@ void *thread_worker(void *args){
         sem_post(&fila->livre);
 
         // Executa a tarefa (fora da seção crítica)
-        (tarefa.funcao)(tarefa.argumento);
+        (tarefa.function)(tarefa.argument);
     };
     return NULL;
 };
 
 
 //Logica para criar uma pool de threads baseando em produtor/consumidor. 
-ThreadPool* pool_create(size_t num_threads, size_t queue_size){
+ThreadPool *pool_init(size_t num_threads, size_t queue_size){
 
     if (num_threads == 0 || queue_size == 0) return NULL;
 
@@ -94,7 +94,7 @@ ThreadPool* pool_create(size_t num_threads, size_t queue_size){
     //inicializando e alocando na memoria atributos da pool e fila
     pool->desligar = 0;
     pool->numero_threads = num_threads; //define n de threads
-    pool->threads = (pthread*)malloc(sizeof(pthread_t) * num_threads);
+    pool->threads = (pthread_t*)malloc(sizeof(pthread_t) * num_threads);
     pool->fila = (FilaTarefas*)malloc(sizeof(FilaTarefas));
     pool->fila->tarefas = (Tarefa*)malloc(sizeof(Tarefa) * queue_size);
     pool->fila->tamanho_max = queue_size; //!!queue_size definido no arg (quero estabelecer uma padrao depois)
@@ -106,7 +106,7 @@ ThreadPool* pool_create(size_t num_threads, size_t queue_size){
 
 
     for (size_t i = 0; i < num_threads; i++) {
-        pthread_create(&pool->threads[i], NULL, funcao_worker, pool);
+        pthread_create(&pool->threads[i], NULL, thread_worker, pool);
     }
 
     return pool;
@@ -117,8 +117,8 @@ void execute(ThreadPool* pool, void (*funcao)(void *), void *argumento) {
     if (pool == NULL || pool->desligar) return;
 
     Tarefa tarefa;
-    tarefa.funcao = funcao;
-    tarefa.argumento = argumento;
+    tarefa.function = funcao;
+    tarefa.argument = argumento;
 
     FilaTarefas* fila = pool->fila;
     //espera espaço na fila
@@ -136,7 +136,7 @@ void execute(ThreadPool* pool, void (*funcao)(void *), void *argumento) {
 void pool_destroy(ThreadPool* pool) {
     if (pool == NULL) return;
 
-    pool->shutdown = 1;
+    pool->desligar = 1;
 
     //acorda as threads para serem destruidas
     for (size_t i = 0; i < pool->numero_threads; i++) {
