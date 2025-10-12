@@ -13,26 +13,35 @@
 //Tamanho da pool de threads
 #define T_POOL 5
 
-//Criando o tipo para a fila de tarefas (buffer)
-typedef struct 
+//Tipo de dado Tarefa(task) que tem como atributos
+//Um ponteiro para uma função
+//Um argumento para a função -> o que será executado
+typedef struct
 {
-    Tarefa lista_t[T_POOL];
-    int inicio;
-    int fim;
+    void (*function)(void *arg);
+    void *argument;
+} Tarefa;
+
+//Criando o tipo para a fila de tarefas (buffer)
+typedef struct FilaTarefas
+{
+    Tarefa* tarefas; // ponteiro para lista de tarefas
+    size_t inicio, fim, tamanho_max;
 
     //mutex para proteger seção critica
     pthread_mutex_t mutex;
     //Semaforos para "contar" tarefas
-    sem_t espaco;
     sem_t ocupado;
+    sem_t livre;
 } FilaTarefas;
 
 //Declarando o conteudo do tipo ThreadPool(.h)
 struct ThreadPool
 {
-    pthread_t *threads;
-    int id_threads;
-    FilaTarefas *fila;
+    pthread_t *threads; //ponteiro para array de threads
+    int desligar;
+    size_t numero_threads;
+    FilaTarefas *fila; //ponteiro para lista de tarefas
 };
 
 
@@ -48,17 +57,24 @@ void *thread_worker(void *args){
         //Espera até que tenha algo na fila, usando semafaro
         sem_wait(&fila->ocupado); //wait no semafaro ocupado, que é atributo da fila
         
+        //caso a pool seja sinalizada para desligar
+        if (pool -> desligar){
+            //sinaliza
+            sem_post(&fila->ocupado);
+            break;
+        }
+
         //Após passar o semafaro, trava o mutex da fila (secão critica)
         pthread_mutex_lock(&fila->mutex);
 
         //dentro da fila, pegando a tarefa do inicio da lista e guardando o retorno
         Tarefa tarefa = fila->lista_t[fila->inicio];
-        fila -> inicio = (fila->inicio + 1) % T_POOL;
+        fila -> inicio = (fila->inicio + 1) % fila->tamanho_max;;
 
         pthread_mutex_unlock(&fila->mutex);
 
         //sinaliza que um espaço na fila foi liberado
-        sem_post(&fila->espaco);
+        sem_post(&fila->livre);
 
         // Executa a tarefa (fora da seção crítica)
         (tarefa.funcao)(tarefa.argumento);
@@ -68,38 +84,74 @@ void *thread_worker(void *args){
 
 
 //Logica para criar uma pool de threads baseando em produtor/consumidor. 
-int createPool(){
+ThreadPool* pool_create(size_t num_threads, size_t queue_size){
 
-    int i = 0;
+    if (num_threads == 0 || queue_size == 0) return NULL;
 
-    pthread_create(&threds[i], NULL, thread_mestre, &threads_id[i]);
-    
-    
-    for (i = 1, i < T_POOL, i++){
-        threads_id[i] = i;
-        pthread_create(&threds[i], NULL, thread_workers, &threads_id[i]);
-    };
+    //alocando pool na memoria e guardando em um ponteiro
+    ThreadPool *pool = (ThreadPool*)malloc(sizeof(ThreadPool));
 
-    for(i = 1; i < T_POOL; i++){
-        pthread_join(threads[i],NULL);
-    };
+    //inicializando e alocando na memoria atributos da pool e fila
+    pool->desligar = 0;
+    pool->numero_threads = num_threads; //define n de threads
+    pool->threads = (pthread*)malloc(sizeof(pthread_t) * num_threads);
+    pool->fila = (FilaTarefas*)malloc(sizeof(FilaTarefas));
+    pool->fila->tarefas = (Tarefa*)malloc(sizeof(Tarefa) * queue_size);
+    pool->fila->tamanho_max = queue_size; //!!queue_size definido no arg (quero estabelecer uma padrao depois)
+    pool->fila->inicio = 0;
+    pool->fila->fim = 0;
+    pthread_mutex_init(&pool->fila->mutex, NULL);
+    sem_init(&pool->fila->ocupado, 0, 0);
+    sem_init(&pool->fila->livre, 0, queue_size);
 
-    pthread_cancel(threads[0]); // thread mestre
+
+    for (size_t i = 0; i < num_threads; i++) {
+        pthread_create(&pool->threads[i], NULL, funcao_worker, pool);
+    }
+
+    return pool;
 };
 
-//codigo incompleto, falta entender como realizar o escopo
-int execute() {
 
-    sem_init(&ocupado, 0, 0); // inicia semafaro "fechado"
-    sem_init(&espaco, 0, T_POOL); //inicia semafaro a partir do tamanho da pool
-    pthread_mutex_init(&mutex, NULL);
+void execute(ThreadPool* pool, void (*funcao)(void *), void *argumento) {
+    if (pool == NULL || pool->desligar) return;
 
-    //cria a pool
-    createPool();
+    Tarefa tarefa;
+    tarefa.funcao = funcao;
+    tarefa.argumento = argumento;
 
-    //destroi os semafaros
-    sem_destroy(&ocupado);
-    sem_destroy(&espaco);
-    pthread_mutex_destroy(&mutex);
+    FilaTarefas* fila = pool->fila;
+    //espera espaço na fila
+    sem_wait(&fila->livre);
 
+    pthread_mutex_lock(&fila->mutex);
+    fila->tarefas[fila->fim] = tarefa;
+    fila->fim = (fila->fim + 1) % fila->tamanho_max;
+    pthread_mutex_unlock(&fila->mutex);
+
+    //sinaliza que adicionou uma tarefa na lista
+    sem_post(&fila->ocupado);
+};
+
+void pool_destroy(ThreadPool* pool) {
+    if (pool == NULL) return;
+
+    pool->shutdown = 1;
+
+    //acorda as threads para serem destruidas
+    for (size_t i = 0; i < pool->numero_threads; i++) {
+        sem_post(&pool->fila->ocupado);
+    }
+    for (size_t i = 0; i < pool->numero_threads; i++) {
+        pthread_join(pool->threads[i], NULL);
+    }
+
+    //liberando memoria
+    free(pool->fila->tarefas);
+    sem_destroy(&pool->fila->ocupado);
+    sem_destroy(&pool->fila->livre);
+    pthread_mutex_destroy(&pool->fila->mutex);
+    free(pool->fila);
+    free(pool->threads);
+    free(pool);
 };
