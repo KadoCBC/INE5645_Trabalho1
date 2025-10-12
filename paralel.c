@@ -36,63 +36,34 @@ struct ThreadPool
 };
 
 
-//Thread que irá fazer a chamada das atividades para pool -> produtora
-void *thread_mestre(void *args){
-
-    //talvez tenha um While aqui()
-    int task = 0;//temporario irá receber dos args
-    
-    // espera por um sinal de espaço 
-    sem_wait(&espaco);
-
-    // bloqueia o mutex para buffer (seção critica)
-    pthread_mutex_lock(&mutex);
-
-    //coloca task na fil de tarefas (buffer)
-    fila[contador_fila] = task;
-    printf("tarefa adicionada: %d\n", task)
-    contador_fila = contador_fila + 1;
-
-    // libera mutex
-    pthread_mutex_unlock(&mutex);
-
-    // manda sinal de nova task
-    sem_post(&ocupado);
-
-};
-
 //Threads que irá exucutar a lista de atividas -> consumidora
 void *thread_worker(void *args){
 
     //Conversão do argumento para o tipo ThreadPool
-    ThreadPool *pool = (ThreadPool *)arg; // ponteiro ->pool do tipo ThreadPool que recebe do argumento da funcao uma ThreadPool
+    ThreadPool *pool = (ThreadPool *)arg; // ponteiro pool do tipo ThreadPool que recebe do argumento da funcao uma ThreadPool
     //criar um ponteiro para fila, argumento dentro da pool(facilitar o acesso a fila)
     FilaTarefas *fila = pool->fila; 
     
     While(1){
-
+        //Espera até que tenha algo na fila, usando semafaro
+        sem_wait(&fila->ocupado); //wait no semafaro ocupado, que é atributo da fila
         
+        //Após passar o semafaro, trava o mutex da fila (secão critica)
+        pthread_mutex_lock(&fila->mutex);
 
+        //dentro da fila, pegando a tarefa do inicio da lista e guardando o retorno
+        Tarefa tarefa = fila->lista_t[fila->inicio];
+        fila -> inicio = (fila->inicio + 1) % T_POOL;
+
+        pthread_mutex_unlock(&fila->mutex);
+
+        //sinaliza que um espaço na fila foi liberado
+        sem_post(&fila->espaco);
+
+        // Executa a tarefa (fora da seção crítica)
+        (tarefa.funcao)(tarefa.argumento);
     };
-
-
-    //espera sinal de nova taks
-    sem_wait(&ocupado);
-
-    //bloqueia o mutex 
-    pthread_mutux_lock(&mutex);
-
-    //tira task na fil de tarefas (buffer)
-    int task = fila[contador_fila];
-    //executa a task (fazer codigo)
-    printf("tarefa executada: %d\n", task)
-    contador_fila = contador_fila - 1;
-
-    // libera mutex
-    pthread_mutex_unlock(&mutex);
-
-    // sinaliza novo espaco no buffer
-    sem_post(&espaco);
+    return NULL;
 };
 
 
