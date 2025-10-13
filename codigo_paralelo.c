@@ -7,7 +7,7 @@
 
 // Definições globais
 #define NUM_VETORES 10
-#define TAMANHO_VETOR 1000 
+#define TAMANHO_VETOR 500000
 #define NUM_THREADS 2
 
 int **matriz;

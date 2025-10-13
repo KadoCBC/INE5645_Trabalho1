@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include "paralel.h"
@@ -46,10 +47,10 @@ struct ThreadPool
 
 
 //Threads que irá exucutar a lista de atividas -> consumidora
-void *thread_worker(void *args){
+static void *thread_worker(void *arg){
 
     //Conversão do argumento para o tipo ThreadPool
-    ThreadPool *pool = (ThreadPool *)args; // ponteiro pool do tipo ThreadPool que recebe do argumento da funcao uma ThreadPool
+    ThreadPool *pool = (ThreadPool *)arg; // ponteiro pool do tipo ThreadPool que recebe do argumento da funcao uma ThreadPool
     //criar um ponteiro para fila, argumento dentro da pool(facilitar o acesso a fila)
     FilaTarefas *fila = pool->fila; 
     
@@ -57,19 +58,20 @@ void *thread_worker(void *args){
         //Espera até que tenha algo na fila, usando semafaro
         sem_wait(&fila->ocupado); //wait no semafaro ocupado, que é atributo da fila
         
-        //caso a pool seja sinalizada para desligar
-        if (pool -> desligar){
-            //sinaliza
-            sem_post(&fila->ocupado);
-            break;
-        }
-
         //Após passar o semafaro, trava o mutex da fila (secão critica)
         pthread_mutex_lock(&fila->mutex);
 
+
+        //caso a pool seja sinalizada para desligar
+        if (pool -> desligar && fila->inicio == fila->fim){
+            pthread_mutex_unlock(&fila->mutex);
+            sem_post(&fila->ocupado);
+            break;
+        };
+
         //dentro da fila, pegando a tarefa do inicio da lista e guardando o retorno
         Tarefa tarefa = fila->tarefas[fila->inicio];
-        fila -> inicio = (fila->inicio + 1) % fila->tamanho_max;;
+        fila -> inicio = (fila->inicio + 1) % fila->tamanho_max;
 
         pthread_mutex_unlock(&fila->mutex);
 
@@ -134,8 +136,8 @@ void execute(ThreadPool* pool, void (*funcao)(void *), void *argumento) {
 };
 
 void pool_destroy(ThreadPool* pool) {
-    if (pool == NULL) return;
 
+    //sleep(5);
     pool->desligar = 1;
 
     //acorda as threads para serem destruidas

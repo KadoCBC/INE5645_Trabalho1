@@ -6,8 +6,7 @@
 
 // Definições globais
 #define NUM_VETORES 10
-#define TAMANHO_VETOR 1000 
-//#define NUM_THREADS 4
+#define TAMANHO_VETOR 500000
 
 
 void gerar_vetores(int ***matriz_vetores, int num_vetores, int tamanho) {
