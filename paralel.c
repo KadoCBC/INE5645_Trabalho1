@@ -61,7 +61,6 @@ static void *thread_worker(void *arg){
         //Após passar o semafaro, trava o mutex da fila (secão critica)
         pthread_mutex_lock(&fila->mutex);
 
-
         //caso a pool seja sinalizada para desligar
         if (pool -> desligar && fila->inicio == fila->fim){
             pthread_mutex_unlock(&fila->mutex);
@@ -136,8 +135,20 @@ void execute(ThreadPool* pool, void (*funcao)(void *), void *argumento) {
 };
 
 void pool_destroy(ThreadPool* pool) {
-
-    //sleep(5);
+    
+    // Espera que todas as tarefas sejam processadas
+    // Aguarda até que a fila esteja vazia
+    FilaTarefas* fila = pool->fila;
+    while(1) {
+        pthread_mutex_lock(&fila->mutex);
+        int fila_vazia = (fila->inicio == fila->fim);
+        pthread_mutex_unlock(&fila->mutex);
+        
+        if (fila_vazia) break;
+        usleep(1000); // Aguarda 1ms
+    }
+    
+    // Agora sinaliza para desligar
     pool->desligar = 1;
 
     //acorda as threads para serem destruidas

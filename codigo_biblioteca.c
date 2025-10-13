@@ -76,8 +76,6 @@ void quicksort(int arr[], int left, int right) {
 
 //Adaptação para usar a biblioteca
 void tarefa_ordenar(void* arg) {
-
-    printf("Thread %lu comecou a ordenar um vetor.\n", (unsigned long)pthread_self());
     // 1. Converte o argumento genérico `void*` de volta para o tipo que sabemos que ele é: `int*`
     int *vetor_a_ordenar = (int*)arg;
 
