@@ -5,6 +5,7 @@
 #include <string.h>
 #include "paralel.h"
 #include <pthread.h>
+#include <unistd.h>
 
 // --- DEFINIÇÕES GLOBAIS ---
 #define NUM_VETORES 10
@@ -77,7 +78,6 @@ void quicksort(int arr[], int left, int right) {
 //Adaptação para usar a biblioteca
 void tarefa_ordenar(void* arg) {
 
-    printf("Thread %lu comecou a ordenar um vetor.\n", (unsigned long)pthread_self());
     // 1. Converte o argumento genérico `void*` de volta para o tipo que sabemos que ele é: `int*`
     int *vetor_a_ordenar = (int*)arg;
 
@@ -113,9 +113,6 @@ int main() {
         // O argumento é o ponteiro para o i vetor
         execute(pool, tarefa_ordenar, vetores[i]);
     }
-    
-    // Destrói a pool. Esta função irá bloquear e esperar que TODAS as tarefas
-    // na fila sejam concluídas antes de continuar. É o nosso "ponto de sincronização".
     pool_destroy(pool);
     
     gettimeofday(&t2, NULL);

@@ -61,13 +61,11 @@ static void *thread_worker(void *arg){
         //Após passar o semafaro, trava o mutex da fila (secão critica)
         pthread_mutex_lock(&fila->mutex);
 
-
         //caso a pool seja sinalizada para desligar
-        if (pool -> desligar && fila->inicio == fila->fim){
+        if (pool->desligar && fila->inicio == fila->fim){
             pthread_mutex_unlock(&fila->mutex);
-            sem_post(&fila->ocupado);
             break;
-        };
+        }
 
         //dentro da fila, pegando a tarefa do inicio da lista e guardando o retorno
         Tarefa tarefa = fila->tarefas[fila->inicio];
@@ -77,10 +75,10 @@ static void *thread_worker(void *arg){
 
         //sinaliza que um espaço na fila foi liberado
         sem_post(&fila->livre);
-
+        
         // Executa a tarefa (fora da seção crítica)
         (tarefa.function)(tarefa.argument);
-    };
+    }
     return NULL;
 };
 
@@ -116,7 +114,10 @@ ThreadPool *pool_init(size_t num_threads, size_t queue_size){
 
 
 void execute(ThreadPool* pool, void (*funcao)(void *), void *argumento) {
-    if (pool == NULL || pool->desligar) return;
+    if (pool == NULL || pool->desligar) {
+        printf("[execute] Pool nula ou desligando, não adicionando tarefa.\n");
+        return;
+    } 
 
     Tarefa tarefa;
     tarefa.function = funcao;
@@ -129,6 +130,7 @@ void execute(ThreadPool* pool, void (*funcao)(void *), void *argumento) {
     pthread_mutex_lock(&fila->mutex);
     fila->tarefas[fila->fim] = tarefa;
     fila->fim = (fila->fim + 1) % fila->tamanho_max;
+    //printf("[execute] Tarefa adicionada na posicao (inicio=%zu, fim=%zu)\n", fila->inicio, fila->fim);
     pthread_mutex_unlock(&fila->mutex);
 
     //sinaliza que adicionou uma tarefa na lista
@@ -137,16 +139,18 @@ void execute(ThreadPool* pool, void (*funcao)(void *), void *argumento) {
 
 void pool_destroy(ThreadPool* pool) {
 
-    //sleep(5);
+    usleep(1000);
     pool->desligar = 1;
 
     //acorda as threads para serem destruidas
     for (size_t i = 0; i < pool->numero_threads; i++) {
         sem_post(&pool->fila->ocupado);
     }
+    
     for (size_t i = 0; i < pool->numero_threads; i++) {
         pthread_join(pool->threads[i], NULL);
     }
+
 
     //liberando memoria
     free(pool->fila->tarefas);
